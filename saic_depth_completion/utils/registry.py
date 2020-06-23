@@ -11,5 +11,7 @@ class Registry(dict):
 
 
 MODELS = Registry()
+TF_MODELS = Registry()
 BACKBONES = Registry()
+TF_BACKBONES = Registry()
 

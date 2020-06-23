@@ -1,15 +1,17 @@
 import torch
+import tensorflow as tf
 
 import argparse
 
 from saic_depth_completion.data.datasets.matterport import Matterport
 from saic_depth_completion.data.datasets.nyuv2_test import NyuV2Test
-from saic_depth_completion.engine.inference import inference
+from saic_depth_completion.engine.inference import inference, tf_inference
 from saic_depth_completion.utils.tensorboard import Tensorboard
 from saic_depth_completion.utils.logger import setup_logger
 from saic_depth_completion.utils.experiment import setup_experiment
 from saic_depth_completion.utils.snapshoter import Snapshoter
 from saic_depth_completion.modeling.meta import MetaModel
+from saic_depth_completion.modeling.tf.meta import MetaModel as TFMetaModel
 from saic_depth_completion.config import get_default_config
 from saic_depth_completion.data.collate import default_collate
 from saic_depth_completion.metrics import Miss, SSIM, DepthL2Loss, DepthL1Loss, DepthRel
@@ -29,6 +31,9 @@ def main():
     parser.add_argument(
         "--weights", default="", type=str, metavar="FILE", help="path to config file"
     )
+    parser.add_argument(
+        "--tf", default=False, type=bool, help="whether to use tensorflow model"
+    )
 
     args = parser.parse_args()
 
@@ -36,14 +41,22 @@ def main():
     cfg.merge_from_file(args.config_file)
     cfg.freeze()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model = MetaModel(cfg, device)
-
-    logger = setup_logger()
-
-    snapshoter = Snapshoter(model, logger=logger)
-    snapshoter.load(args.weights)
+    if args.tf:
+        device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
+        tf_block = TFMetaModel(cfg, device)
+        input_shapes = {"color": (224, 224, 3), "raw_depth": (224, 224, 1), "mask": (224, 224, 1)}
+        input = {key: tf.keras.layers.Input(shape, name=f'input_{key}') for key, shape in input_shapes.items()}
+        output = tf_block(input)
+        model = tf.keras.models.Model(inputs=input,
+                                      outputs=output,
+                                      name='tf_model')
+        model.load_weights(args.weights)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = MetaModel(cfg, device)
+        logger = setup_logger()
+        snapshoter = Snapshoter(model, logger=logger)
+        snapshoter.load(args.weights)
 
     metrics = {
         'mse': DepthL2Loss(),
@@ -59,7 +72,7 @@ def main():
 
     test_datasets = {
         "test_matterport": Matterport(split="test"),
-        "official_nyu_test": NyuV2Test(split="official_test"),
+        # "official_nyu_test": NyuV2Test(split="official_test"),
         #
         # # first
         # "1gr10pv1pd": NyuV2Test(split="1gr10pv1pd"),
@@ -112,7 +125,8 @@ def main():
         for k, v in test_datasets.items()
     }
 
-    inference(
+    inference_procedure = tf_inference if args.tf else inference
+    inference_procedure(
         model,
         test_loaders,
         save_dir=args.save_dir,
