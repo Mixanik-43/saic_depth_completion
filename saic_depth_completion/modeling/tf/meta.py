@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from .checkpoint_utils import submodel_state_dict
 from .dm_lrn import DM_LRN
 
@@ -12,8 +13,8 @@ class MetaModel(tf.keras.layers.Layer):
         if isinstance(self.device, str):
             self.device = tf.device(self.device)
 
-        self.rgb_mean = cfg.train.rgb_mean
-        self.rgb_std = cfg.train.rgb_std
+        self.rgb_mean = np.array(cfg.train.rgb_mean).reshape(1, 1, 1, 3)
+        self.rgb_std = np.array(cfg.train.rgb_std).reshape(1, 1, 1, 3)
 
         self.depth_mean = cfg.train.depth_mean
         self.depth_std = cfg.train.depth_std
@@ -24,8 +25,8 @@ class MetaModel(tf.keras.layers.Layer):
 
     def preprocess(self, batch):
         with self.device:
-            batch["color"] = batch["color"] - tf.Tensor(self.rgb_mean).reshape(1, 1, 1, 3)
-            batch["color"] = batch["color"] / tf.Tensor(self.rgb_std).reshape(1, 1, 1, 3)
+            batch["color"] = batch["color"] - self.rgb_mean
+            batch["color"] = batch["color"] / self.rgb_std
 
             mask = batch["raw_depth"] != 0
             batch["raw_depth"][mask] = batch["raw_depth"][mask] - self.depth_mean

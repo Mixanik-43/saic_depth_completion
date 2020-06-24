@@ -41,10 +41,12 @@ def main():
     cfg.merge_from_file(args.config_file)
     cfg.freeze()
 
+    logger = setup_logger()
+
     if args.tf:
         device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
         tf_block = TFMetaModel(cfg, device)
-        input_shapes = {"color": (224, 224, 3), "raw_depth": (224, 224, 1), "mask": (224, 224, 1)}
+        input_shapes = {"color": (256, 320, 3), "raw_depth": (256, 320, 1), "mask": (256, 320, 1)}
         input = {key: tf.keras.layers.Input(shape, name=f'input_{key}') for key, shape in input_shapes.items()}
         output = tf_block(input)
         model = tf.keras.models.Model(inputs=input,
@@ -54,7 +56,6 @@ def main():
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = MetaModel(cfg, device)
-        logger = setup_logger()
         snapshoter = Snapshoter(model, logger=logger)
         snapshoter.load(args.weights)
 

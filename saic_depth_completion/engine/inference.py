@@ -62,12 +62,13 @@ def tf_inference(model, test_loaders, metrics, save_dir="", logger=None):
         metrics_meter.reset()
         # loop over dataset
         for batch in tqdm(loader):
-            batch = {k: v.permute(0, 2, 3, 1).detach().numpy() for k, v in batch.items()}
-            batch = model.preprocess(batch)
-            pred = torch.Tensor(model(batch, training=False)).permute(0, 3, 1, 2)
+            batch_for_inference = {k: batch[k].permute(0, 2, 3, 1).detach().numpy() for k in ["color", "raw_depth", "mask"]}
+            batch_for_inference = model.layers[-1].preprocess(batch_for_inference)
+            pred = model(batch_for_inference, training=False)
 
             with torch.no_grad():
-                post_pred = model.postprocess(pred)
+                pred = torch.Tensor(pred.numpy()).permute(0, 3, 1, 2)
+                post_pred = model.layers[-1].postprocess(pred)
                 if save_dir:
                     B = batch["color"].shape[0]
                     for it in range(B):

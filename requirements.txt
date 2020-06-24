@@ -10,6 +10,7 @@ pyyaml
 easydict
 tqdm
 efficientnet_pytorch
+efficientnet
 colorlog
 tensorboard
 opencv-python-headless
