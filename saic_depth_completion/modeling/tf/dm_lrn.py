@@ -96,22 +96,6 @@ class DM_LRN(tf.keras.layers.Layer):
         if not self.predict_log_depth:
             self.act = ops.ACTIVATION_LAYERS[self.activation[0]](*self.activation[1])
 
-    def criterion(self, pred, gt):
-        total = 0
-        for spec in self.losses:
-            if len(spec) == 3:
-                loss_fn = LOSSES[spec[0]](*spec[2])
-            else:
-                loss_fn = LOSSES[spec[0]]()
-            total += spec[1] * loss_fn(pred, gt)
-        return total
-
-    def postprocess(self, pred):
-        if self.predict_log_depth:
-            return pred.exp()
-
-        return pred
-
     def call(self, batch, **kwargs):
         color, raw_depth, mask = batch
 

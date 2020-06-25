@@ -5,13 +5,13 @@ import argparse
 
 from saic_depth_completion.data.datasets.matterport import Matterport
 from saic_depth_completion.data.datasets.nyuv2_test import NyuV2Test
-from saic_depth_completion.engine.inference import inference, tf_inference
+from saic_depth_completion.engine.inference import inference, tf_inference, tflite_inference
 from saic_depth_completion.utils.tensorboard import Tensorboard
 from saic_depth_completion.utils.logger import setup_logger
 from saic_depth_completion.utils.experiment import setup_experiment
 from saic_depth_completion.utils.snapshoter import Snapshoter
 from saic_depth_completion.modeling.meta import MetaModel
-from saic_depth_completion.modeling.tf.meta import MetaModel as TFMetaModel
+from saic_depth_completion.modeling.tf.meta import preprocess, postprocess
 from saic_depth_completion.config import get_default_config
 from saic_depth_completion.data.collate import default_collate
 from saic_depth_completion.metrics import Miss, SSIM, DepthL2Loss, DepthL1Loss, DepthRel
@@ -52,12 +52,20 @@ def main():
         snapshoter = Snapshoter(model, logger=logger)
         snapshoter.load(args.saved_model)
         inference_procedure = inference
+        preprocess_func = model.preprocess
+        postprocess_func = model.postprocess
     elif args.framework == "tf":
         model = tf.saved_model.load(args.saved_model)
         inference_procedure = tf_inference
+        preprocess_func = lambda batch: preprocess(cfg, batch)
+        postprocess_func = lambda pred: postprocess(cfg, pred)
+
     else:
         interpreter = tf.lite.Interpreter(model_path=args.tflite_path)
         interpreter.allocate_tensors()
+        inference_procedure = tflite_inference()
+        preprocess_func = lambda batch: preprocess(cfg, batch)
+        postprocess_func = lambda pred: postprocess(cfg, pred)
 
     metrics = {
         'mse': DepthL2Loss(),
@@ -129,6 +137,8 @@ def main():
     inference_procedure(
         model,
         test_loaders,
+        preprocess_func=preprocess_func,
+        postprocess_func=postprocess_func,
         save_dir=args.save_dir,
         logger=logger,
         metrics=metrics,

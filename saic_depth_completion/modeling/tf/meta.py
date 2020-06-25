@@ -5,6 +5,25 @@ from .dm_lrn import DM_LRN
 
 from saic_depth_completion.utils import registry
 # refactor this to
+
+
+def preprocess(cfg, batch):
+    batch["color"] = batch["color"].permute(0, 2, 3, 1).detach().numpy() - np.array(cfg.train.rgb_mean).reshape(1, 1, 1, 3)
+    batch["color"] = batch["color"] / np.array(cfg.train.rgb_std).reshape(1, 1, 1, 3)
+
+    mask = batch["raw_depth"].permute(0, 2, 3, 1).detach().numpy() != 0
+    batch["raw_depth"][mask] = batch["raw_depth"][mask].permute(0, 2, 3, 1).detach().numpy() - cfg.train.depth_mean
+    batch["raw_depth"][mask] = batch["raw_depth"][mask] / cfg.train.depth_std
+    return batch['color'], batch['raw_depth'], batch['mask']
+
+
+def postprocess(cfg, pred):
+    if cfg.model.predict_log_depth:
+        return pred.exp()
+    else:
+        return pred
+
+
 class MetaModel(tf.keras.layers.Layer):
     def __init__(self, cfg, device, input_shape=None):
         super(MetaModel, self).__init__()
@@ -13,11 +32,7 @@ class MetaModel(tf.keras.layers.Layer):
         if isinstance(self.device, str):
             self.device = tf.device(self.device)
 
-        self.rgb_mean = np.array(cfg.train.rgb_mean).reshape(1, 1, 1, 3)
-        self.rgb_std = np.array(cfg.train.rgb_std).reshape(1, 1, 1, 3)
-
-        self.depth_mean = cfg.train.depth_mean
-        self.depth_std = cfg.train.depth_std
+        self.cfg = cfg
 
     def call(self, batch, **kwargs):
         with self.device:
@@ -25,16 +40,11 @@ class MetaModel(tf.keras.layers.Layer):
 
     def preprocess(self, batch):
         with self.device:
-            batch["color"] = batch["color"] - self.rgb_mean
-            batch["color"] = batch["color"] / self.rgb_std
-
-            mask = batch["raw_depth"] != 0
-            batch["raw_depth"][mask] = batch["raw_depth"][mask] - self.depth_mean
-            batch["raw_depth"][mask] = batch["raw_depth"][mask] / self.depth_std
-            return batch['color'], batch['raw_depth'], batch['mask']
+            return preprocess(self.cfg, batch)
 
     def postprocess(self, input):
-        return self.model.postprocess(input)
+        return postprocess(self.cfg, input)
+
     def criterion(self, pred, gt):
         return self.model.criterion(pred, gt)
 

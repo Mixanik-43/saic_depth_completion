@@ -13,7 +13,8 @@ from saic_depth_completion.utils import visualize
 
 
 def inference(
-        model, test_loaders, metrics, save_dir="", logger=None
+        model, test_loaders, metrics, save_dir="", logger=None,
+        preprocess_func=lambda x: x, postprocess_func=lambda x: x
 ):
 
     model.eval()
@@ -27,11 +28,11 @@ def inference(
         metrics_meter.reset()
         # loop over dataset
         for batch in tqdm(loader):
-            batch = model.preprocess(batch)
+            batch = preprocess_func(batch)
             pred = model(batch)
 
             with torch.no_grad():
-                post_pred = model.postprocess(pred)
+                post_pred = postprocess_func(pred)
                 if save_dir:
                     B = batch["color"].shape[0]
                     for it in range(B):
@@ -52,7 +53,8 @@ def inference(
         logger.info(state + metrics_meter.suffix)
 
 
-def tf_inference(model, test_loaders, metrics, save_dir="", logger=None):
+def tf_inference(model, test_loaders, metrics, save_dir="", logger=None,
+                 preprocess_func=lambda x: x, postprocess_func=lambda x: x):
     metrics_meter = AggregatedMeter(metrics, maxlen=20)
     for subset, loader in test_loaders.items():
         idx = 0
@@ -63,13 +65,12 @@ def tf_inference(model, test_loaders, metrics, save_dir="", logger=None):
         metrics_meter.reset()
         # loop over dataset
         for batch in tqdm(loader):
-            batch_for_inference = [batch[k].permute(0, 2, 3, 1).detach().numpy() for k in ["color", "raw_depth", "mask"]]
-            batch_for_inference = model.layers[-1].preprocess(batch_for_inference)
+            batch_for_inference = preprocess_func(batch)
             pred = model(batch_for_inference, training=False)
 
             with torch.no_grad():
                 pred = torch.Tensor(pred.numpy()).permute(0, 3, 1, 2)
-                post_pred = model.layers[-1].postprocess(pred)
+                post_pred = postprocess_func.postprocess(pred)
                 if save_dir:
                     B = batch["color"].shape[0]
                     for it in range(B):
@@ -90,7 +91,8 @@ def tf_inference(model, test_loaders, metrics, save_dir="", logger=None):
         logger.info(state + metrics_meter.suffix)
 
 
-def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None):
+def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None,
+                     preprocess_func=lambda x: x, postprocess_func=lambda x: x):
     input_details = model.get_input_details()
     output_details = model.get_output_details()
     input_shape = input_details[0]['shape']
@@ -105,7 +107,7 @@ def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None):
         metrics_meter.reset()
         # loop over dataset
         for batch in tqdm(loader):
-            batch_for_inference = [batch[k].permute(0, 2, 3, 1).detach().numpy(dtype=np.float32) for k in ["color", "raw_depth", "mask"]]
+            batch_for_inference = preprocess_func(batch)
             for input_id in range(len(batch_for_inference)):
                 model.set_tensor(input_details[input_id]['index'], batch_for_inference[input_id])
             model.invoke()
@@ -113,7 +115,7 @@ def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None):
 
             with torch.no_grad():
                 pred = torch.Tensor(pred.numpy()).permute(0, 3, 1, 2)
-                post_pred = model.layers[-1].postprocess(pred)
+                post_pred = postprocess_func(pred)
                 if save_dir:
                     B = batch["color"].shape[0]
                     for it in range(B):
