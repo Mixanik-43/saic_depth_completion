@@ -38,8 +38,10 @@ def run_tests(raise_errors=True, **kwargs):
                     print(e)
 
 
-def run_block_test(torch_block, tf_block, input_shapes, test_name, max_mape=1):
+def run_block_test(torch_block, tf_block, input_shapes, test_name, max_mape=1, torch_input_shapes=None):
     np.random.seed(0)
+    if torch_input_shapes is None:
+        torch_input_shapes = input_shapes
     if len(input_shapes) == 1:
         input = tf.keras.layers.Input(input_shapes[0], name=f'input')
     elif isinstance(input_shapes, dict):
@@ -55,9 +57,11 @@ def run_block_test(torch_block, tf_block, input_shapes, test_name, max_mape=1):
     else:
         default_set_torch_weights(tf_block, torch_block.state_dict())
 
-    if isinstance(input_shapes, dict):
-        input_tensors = {key: np.random.normal(size=(1, shape[2], shape[0], shape[1])) for key, shape in input_shapes.items()}
-        tf_multiple_out = tf_model.predict_step({key: input_tensor.transpose(0, 2, 3, 1) for key, input_tensor in input_tensors.items()})
+    if isinstance(torch_input_shapes, dict):
+        keys_list = ['color', 'raw_depth', 'mask']
+        assert set(torch_input_shapes.keys()) == set(keys_list)
+        input_tensors = {key: np.random.normal(size=(1, shape[2], shape[0], shape[1])) for key, shape in torch_input_shapes.items()}
+        tf_multiple_out = tf_model.predict_step([input_tensors[key].transpose(0, 2, 3, 1) for key in keys_list])
         torch_multiple_out = torch_block({key: torch.Tensor(input_tensor) for key, input_tensor in input_tensors.items()})
     else:
         input_tensors = [np.random.normal(size=(1, shape[2], shape[0], shape[1])) for shape in input_shapes]
@@ -147,9 +151,10 @@ def test_dm_lrn(torch_model, **kwargs):
     cfg.freeze()
     device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
     tf_block = TFMetaModel(cfg, device)
-    input_shapes = {"color": (224, 224, 3), "raw_depth": (224, 224, 1), "mask": (224, 224, 1)}
+    input_shapes = [(224, 224, 3), (224, 224, 1), (224, 224, 1)]
+    torch_input_shapes = {"color": (224, 224, 3), "raw_depth": (224, 224, 1), "mask": (224, 224, 1)}
     test_name = 'DM_LRN'
-    run_block_test(torch_block, tf_block, input_shapes, test_name, **kwargs)
+    run_block_test(torch_block, tf_block, input_shapes, test_name, torch_input_shapes=torch_input_shapes, **kwargs)
 
 
 if __name__ == '__main__':

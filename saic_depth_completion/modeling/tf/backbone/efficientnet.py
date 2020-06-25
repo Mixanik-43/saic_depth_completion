@@ -30,7 +30,6 @@ import os
 import math
 import string
 import collections
-import numpy as np
 import tensorflow as tf
 
 from six.moves import xrange
@@ -363,6 +362,7 @@ class EfficientNet(tf.keras.layers.Layer):
         num_blocks_total = sum(block_args.num_repeat for block_args in blocks_args)
         block_num = 0
         embeddings_list = []
+        self.feature_channels = []
         for idx, block_args in enumerate(blocks_args):
             assert block_args.num_repeat > 0
 
@@ -383,6 +383,7 @@ class EfficientNet(tf.keras.layers.Layer):
             block_num += 1
             if (out_embeddings_list is not None) and (block_num in out_embeddings_list):
                 embeddings_list.append(x)
+                self.feature_channels.append(block_args.output_filters)
             if block_args.num_repeat > 1:
                 # pylint: disable=protected-access
                 block_args = block_args._replace(
@@ -401,6 +402,7 @@ class EfficientNet(tf.keras.layers.Layer):
                     block_num += 1
                     if (out_embeddings_list is not None) and (block_num in out_embeddings_list):
                         embeddings_list.append(x)
+                        self.feature_channels.append(block_args.output_filters)
 
         # Build top
         if include_top:
@@ -474,12 +476,6 @@ class EfficientNet(tf.keras.layers.Layer):
             model.load_weights(weights)
 
         self.model = model
-
-        dummy_out = self(np.zeros((1, 224, 224, 3)))
-        if out_embeddings_list is None:
-            self.feature_channels = dummy_out.shape[-1]
-        else:
-            self.feature_channels = [out.shape[-1] for out in dummy_out]
 
     def call(self, x, **kwargs):
         return self.model.call(x, **kwargs)

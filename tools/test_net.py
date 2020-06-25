@@ -29,35 +29,35 @@ def main():
         "--save_dir", default="", type=str, help="Save dir for predictions"
     )
     parser.add_argument(
-        "--weights", default="", type=str, metavar="FILE", help="path to config file"
+        "--saved_model", default="", type=str, metavar="FILE", help="path to pytorch state_dict or  tensorflow saved model"
     )
     parser.add_argument(
-        "--tf", default=False, type=bool, help="whether to use tensorflow model"
+        "--framework", default='pytorch', type=str, help="'pytorch', 'tf' or 'tflite'"
     )
 
     args = parser.parse_args()
 
-    cfg = get_default_config(args.default_cfg)
-    cfg.merge_from_file(args.config_file)
-    cfg.freeze()
+
 
     logger = setup_logger()
+    frameworks_list = ['pytorch', 'tf', 'tflite']
+    assert args.framework in frameworks_list, 'Supported frameworks are {}, got {}'.format(frameworks_list, args.framework)
 
-    if args.tf:
-        device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
-        tf_block = TFMetaModel(cfg, device)
-        input_shapes = {"color": (256, 320, 3), "raw_depth": (256, 320, 1), "mask": (256, 320, 1)}
-        input = {key: tf.keras.layers.Input(shape, name=f'input_{key}') for key, shape in input_shapes.items()}
-        output = tf_block(input)
-        model = tf.keras.models.Model(inputs=input,
-                                      outputs=output,
-                                      name='tf_model')
-        model.load_weights(args.weights)
-    else:
+    if args.framework == "pytorch":
+        cfg = get_default_config(args.default_cfg)
+        cfg.merge_from_file(args.config_file)
+        cfg.freeze()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = MetaModel(cfg, device)
         snapshoter = Snapshoter(model, logger=logger)
-        snapshoter.load(args.weights)
+        snapshoter.load(args.saved_model)
+        inference_procedure = inference
+    elif args.framework == "tf":
+        model = tf.saved_model.load(args.saved_model)
+        inference_procedure = tf_inference
+    else:
+        interpreter = tf.lite.Interpreter(model_path=args.tflite_path)
+        interpreter.allocate_tensors()
 
     metrics = {
         'mse': DepthL2Loss(),
@@ -126,7 +126,6 @@ def main():
         for k, v in test_datasets.items()
     }
 
-    inference_procedure = tf_inference if args.tf else inference
     inference_procedure(
         model,
         test_loaders,

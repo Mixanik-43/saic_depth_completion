@@ -9,7 +9,7 @@ from saic_depth_completion.metrics import LOSSES
 
 @registry.TF_MODELS.register("DM-LRN")
 class DM_LRN(tf.keras.layers.Layer):
-    def __init__(self, model_cfg):
+    def __init__(self, model_cfg, input_shape=None):
         super(DM_LRN, self).__init__()
 
         self.stem = tf.keras.Sequential()
@@ -17,7 +17,7 @@ class DM_LRN(tf.keras.layers.Layer):
         self.stem.add(tf.keras.layers.BatchNormalization())
         self.stem.add(tf.keras.layers.ReLU())
 
-        self.backbone               = registry.TF_BACKBONES[model_cfg.backbone.arch](model_cfg.backbone)
+        self.backbone               = registry.TF_BACKBONES[model_cfg.backbone.arch](input_shape=input_shape)
         self.feature_channels       = self.backbone.feature_channels
 
         self.predict_log_depth      = model_cfg.predict_log_depth
@@ -113,7 +113,7 @@ class DM_LRN(tf.keras.layers.Layer):
         return pred
 
     def call(self, batch, **kwargs):
-        color, raw_depth, mask = batch["color"], batch["raw_depth"], batch["mask"]
+        color, raw_depth, mask = batch
 
         x = tf.concat([color, raw_depth], axis=-1)
         mask = mask + 1.0

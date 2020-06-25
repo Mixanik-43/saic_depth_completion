@@ -6,9 +6,9 @@ from .dm_lrn import DM_LRN
 from saic_depth_completion.utils import registry
 # refactor this to
 class MetaModel(tf.keras.layers.Layer):
-    def __init__(self, cfg, device):
+    def __init__(self, cfg, device, input_shape=None):
         super(MetaModel, self).__init__()
-        self.model = registry.TF_MODELS[cfg.model.arch](cfg.model)
+        self.model = registry.TF_MODELS[cfg.model.arch](cfg.model, input_shape=input_shape)
         self.device = device
         if isinstance(self.device, str):
             self.device = tf.device(self.device)
@@ -19,9 +19,9 @@ class MetaModel(tf.keras.layers.Layer):
         self.depth_mean = cfg.train.depth_mean
         self.depth_std = cfg.train.depth_std
 
-    def call(self, batch):
+    def call(self, batch, **kwargs):
         with self.device:
-            return self.model(batch)
+            return self.model(batch, **kwargs)
 
     def preprocess(self, batch):
         with self.device:
@@ -31,7 +31,7 @@ class MetaModel(tf.keras.layers.Layer):
             mask = batch["raw_depth"] != 0
             batch["raw_depth"][mask] = batch["raw_depth"][mask] - self.depth_mean
             batch["raw_depth"][mask] = batch["raw_depth"][mask] / self.depth_std
-            return batch
+            return batch['color'], batch['raw_depth'], batch['mask']
 
     def postprocess(self, input):
         return self.model.postprocess(input)
