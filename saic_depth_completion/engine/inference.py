@@ -3,6 +3,7 @@ import time
 import datetime
 import torch
 from tqdm import tqdm
+import tensorflow as tf
 import numpy as np
 
 import matplotlib.pyplot as plt
@@ -66,11 +67,10 @@ def tf_inference(model, test_loaders, metrics, save_dir="", logger=None,
         # loop over dataset
         for batch in tqdm(loader):
             batch_for_inference = preprocess_func(batch)
-            pred = model(batch_for_inference, training=False)
-
+            pred = model.signatures["serving_default"](**{'input_{}'.format(i): tf.constant(input_tensor, dtype=tf.float32) for i, input_tensor in enumerate(batch_for_inference)})
             with torch.no_grad():
-                pred = torch.Tensor(pred.numpy()).permute(0, 3, 1, 2)
-                post_pred = postprocess_func.postprocess(pred)
+                pred = torch.Tensor(pred['meta_model'].numpy()).permute(0, 3, 1, 2)
+                post_pred = postprocess_func(pred)
                 if save_dir:
                     B = batch["color"].shape[0]
                     for it in range(B):
@@ -95,7 +95,7 @@ def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None,
                      preprocess_func=lambda x: x, postprocess_func=lambda x: x):
     input_details = model.get_input_details()
     output_details = model.get_output_details()
-    input_shape = input_details[0]['shape']
+    print('shapes', [input_details[i]['shape'] for i in range(len(input_details))])
 
     metrics_meter = AggregatedMeter(metrics, maxlen=20)
     for subset, loader in test_loaders.items():
@@ -114,7 +114,7 @@ def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None,
             pred = model.get_tensor(output_details[0]['index'])
 
             with torch.no_grad():
-                pred = torch.Tensor(pred.numpy()).permute(0, 3, 1, 2)
+                pred = torch.Tensor(pred).permute(0, 3, 1, 2)
                 post_pred = postprocess_func(pred)
                 if save_dir:
                     B = batch["color"].shape[0]

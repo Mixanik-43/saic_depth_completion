@@ -42,11 +42,11 @@ def main():
     logger = setup_logger()
     frameworks_list = ['pytorch', 'tf', 'tflite']
     assert args.framework in frameworks_list, 'Supported frameworks are {}, got {}'.format(frameworks_list, args.framework)
+    cfg = get_default_config(args.default_cfg)
+    cfg.merge_from_file(args.config_file)
+    cfg.freeze()
 
     if args.framework == "pytorch":
-        cfg = get_default_config(args.default_cfg)
-        cfg.merge_from_file(args.config_file)
-        cfg.freeze()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = MetaModel(cfg, device)
         snapshoter = Snapshoter(model, logger=logger)
@@ -56,14 +56,15 @@ def main():
         postprocess_func = model.postprocess
     elif args.framework == "tf":
         model = tf.saved_model.load(args.saved_model)
+
         inference_procedure = tf_inference
         preprocess_func = lambda batch: preprocess(cfg, batch)
         postprocess_func = lambda pred: postprocess(cfg, pred)
 
     else:
-        interpreter = tf.lite.Interpreter(model_path=args.tflite_path)
-        interpreter.allocate_tensors()
-        inference_procedure = tflite_inference()
+        model = tf.lite.Interpreter(model_path=args.saved_model)
+        model.allocate_tensors()
+        inference_procedure = tflite_inference
         preprocess_func = lambda batch: preprocess(cfg, batch)
         postprocess_func = lambda pred: postprocess(cfg, pred)
 

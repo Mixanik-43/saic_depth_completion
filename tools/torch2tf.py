@@ -52,13 +52,19 @@ def main():
     tf_device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
     tf_block = TFMetaModel(cfg, tf_device, input_shape=input_shape + (3,))
     input_shapes = [input_shape + (3,), input_shape + (1,), input_shape + (1,)]
-    input = [tf.keras.layers.Input(shape, name=f'input_{i}') for i, shape in enumerate(input_shapes)]
+    input = [tf.keras.layers.Input(shape, name=f'input_{i}', dtype='float32') for i, shape in enumerate(input_shapes)]
     output = tf_block(input)
     tf_model = tf.keras.models.Model(inputs=input,
                                      outputs=output,
                                      name='tf_model')
     tf_model.layers[-1].set_torch_weights(torch_model.state_dict())
     tf.saved_model.save(tf_model, args.save_path)
+
+    tf_model = tf.saved_model.load(args.save_path)
+
+    out2 = tf_model.signatures["serving_default"](**{'input_0': tf.constant(np.zeros((1, 256, 320, 3)), dtype=tf.float32),
+                                                   'input_1': tf.constant(np.zeros((1, 256, 320, 1)), dtype=tf.float32),
+                                                   'input_2': tf.constant(np.zeros((1, 256, 320, 1)), dtype=tf.float32)})
 
 
 if __name__ == "__main__":
