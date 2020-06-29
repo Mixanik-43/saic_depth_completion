@@ -25,6 +25,7 @@ dependencies:
     - easydict
     - efficientnet-pytorch
     - efficientnet
+    - geffnet
     - future
     - imageio
     - matplotlib

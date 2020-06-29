@@ -11,6 +11,7 @@ easydict
 tqdm
 efficientnet_pytorch
 efficientnet
+geffnet
 colorlog
 tensorboard
 opencv-python-headless

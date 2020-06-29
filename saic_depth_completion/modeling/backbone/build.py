@@ -1,6 +1,7 @@
 from saic_depth_completion.modeling.backbone.resnet import ResNet
 from saic_depth_completion.modeling.backbone.hrnet import HRNet
 from saic_depth_completion.modeling.backbone.efficientnet import EfficientNet
+from saic_depth_completion.modeling.backbone.efficientnet_lite import EfficientnetLiteEncoder
 from saic_depth_completion.utils import registry
 from saic_depth_completion.utils.model_zoo import (_load_state_dict_hrnet,
                                                    _load_state_dict_resnet,
@@ -50,6 +51,15 @@ def build_efficientnet(cfg):
         state_dict = _load_state_dict_efficientnet(cfg.arch)
         efficientnet.load_state_dict(state_dict, strict=False)
     return efficientnet
+
+
+@registry.BACKBONES.register("efficientnet-lite-b0")
+@registry.BACKBONES.register("efficientnet-lite-b1")
+@registry.BACKBONES.register("efficientnet-lite-b2")
+@registry.BACKBONES.register("efficientnet-lite-b3")
+@registry.BACKBONES.register("efficientnet-lite-b4")
+def build_efficientnet(cfg):
+    return EfficientnetLiteEncoder(cfg)
 
 
 def build_backbone(cfg):
