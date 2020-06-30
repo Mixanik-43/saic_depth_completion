@@ -11,7 +11,7 @@ model:
 
 
   backbone:
-    arch: "efficientnet-lite-b0"
+    arch: "tf-efficientnet-lite-b0"
     imagenet: True
 
 

@@ -5,10 +5,11 @@ import geffnet
 class EfficientnetLiteEncoder(torch.nn.Module):
     def __init__(self, config):
         super().__init__()
-        variant = config.variant
-        pretrained = config.pretrained
+        variant = self.get_variant(config.arch)
+        pretrained = config.imagenet
         self.layers = torch.nn.ModuleList([])
         self.feature_channels = []
+
 
         efficientet_params = {'efficientnet_lite0': (1.0, 1.0, 224, 0.2),
                               'efficientnet_lite1': (1.0, 1.1, 240, 0.2),
@@ -52,9 +53,13 @@ class EfficientnetLiteEncoder(torch.nn.Module):
             self.feature_channels.append(x.shape[1])
 
     def get_arch(self, model_name):
-        if model_name.startswith('tf_'):
-            model_name = model_name[3:]
-        return model_name
+        return 'efficientnet_lite' + model_name[-1]
+
+    def get_variant(self, model_name):
+        if model_name.startswith('tf'):
+            return 'tf_efficientnet_lite' + model_name[-1]
+        else:
+            return 'efficientnet_lite' + model_name[-1]
 
 
     def forward(self, input):

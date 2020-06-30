@@ -58,6 +58,11 @@ def build_efficientnet(cfg):
 @registry.BACKBONES.register("efficientnet-lite-b2")
 @registry.BACKBONES.register("efficientnet-lite-b3")
 @registry.BACKBONES.register("efficientnet-lite-b4")
+@registry.BACKBONES.register("tf-efficientnet-lite-b0")
+@registry.BACKBONES.register("tf-efficientnet-lite-b1")
+@registry.BACKBONES.register("tf-efficientnet-lite-b2")
+@registry.BACKBONES.register("tf-efficientnet-lite-b3")
+@registry.BACKBONES.register("tf-efficientnet-lite-b4")
 def build_efficientnet(cfg):
     return EfficientnetLiteEncoder(cfg)
 
