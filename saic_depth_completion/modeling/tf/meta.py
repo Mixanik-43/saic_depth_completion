@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from .checkpoint_utils import submodel_state_dict
 from .dm_lrn import DM_LRN
+from .lrn import LRN
 
 from saic_depth_completion.utils import registry
 # refactor this to

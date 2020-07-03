@@ -20,7 +20,6 @@ class EfficientnetLiteEncoder(torch.nn.Module):
         if arch not in efficientet_params:
             raise ValueError('unknown efficientnet-lite model: {}'.format(arch))
         model_params = efficientet_params[arch]
-        print('loading EfficientnetLiteEncoder', variant, model_params[0], model_params[1], pretrained)
         model = geffnet.gen_efficientnet._gen_efficientnet_lite(variant=variant, channel_multiplier=model_params[0], depth_multiplier=model_params[1],
                                                                 pretrained=pretrained).as_sequential()
 

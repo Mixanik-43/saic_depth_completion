@@ -150,9 +150,6 @@ def test_efficientnet_lite(torch_model, **kwargs):
     cfg.freeze()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch_model = MetaModel(cfg, device).eval()
-    logger = setup_logger()
-    snapshoter = Snapshoter(torch_model, logger=logger)
-    snapshoter.load('weights/arch2_tf_efficientnet-l0_emma_e30.pth')
     torch_block = torch_model.model.backbone
     tf_block = EfficientNetLiteB0()
     input_shapes = [(320, 256, 3)]
@@ -171,6 +168,21 @@ def test_dm_lrn(torch_model, **kwargs):
     test_name = 'DM_LRN'
     run_block_test(torch_block, tf_block, input_shapes, test_name, torch_input_shapes=torch_input_shapes, **kwargs)
 
+
+def test_lrn(torch_model, **kwargs):
+    cfg = get_default_config('LRN')
+    cfg.merge_from_file('configs/lrn/LRN_tf_efficientnet-l0_gabriella.yaml')
+    cfg.freeze()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch_model = MetaModel(cfg, device).eval()
+    torch_block = torch_model
+
+    device = tf.device("/gpu:0" if len(tf.config.list_physical_devices('GPU')) > 0 else "/cpu:0")
+    tf_block = TFMetaModel(cfg, device, input_shape=(224, 224, 3))
+    input_shapes = [(224, 224, 3), (224, 224, 1), (224, 224, 1)]
+    torch_input_shapes = {"color": (224, 224, 3), "raw_depth": (224, 224, 1), "mask": (224, 224, 1)}
+    test_name = 'LRN'
+    run_block_test(torch_block, tf_block, input_shapes, test_name, torch_input_shapes=torch_input_shapes, **kwargs)
 
 if __name__ == '__main__':
     run_tests(raise_errors=True)

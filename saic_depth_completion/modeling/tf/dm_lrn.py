@@ -4,7 +4,6 @@ from saic_depth_completion.modeling.tf.checkpoint_utils import submodel_state_di
 from saic_depth_completion.modeling.tf.blocks import AdaptiveBlock, FusionBlock, CRPBlock, SharedEncoder, Predictor
 from saic_depth_completion.utils import registry
 from saic_depth_completion.modeling.tf import ops
-from saic_depth_completion.metrics import LOSSES
 
 
 @registry.TF_MODELS.register("DM-LRN")
