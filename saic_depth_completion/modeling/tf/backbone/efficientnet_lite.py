@@ -73,7 +73,7 @@ def efficientnet_lite(width_coefficient=None,
     global_params = GlobalParams(
         blocks_args=_DEFAULT_BLOCKS_ARGS,
         batch_norm_momentum=0.99,
-        batch_norm_epsilon=1e-3,
+        batch_norm_epsilon=1e-5,
         dropout_rate=dropout_rate,
         survival_prob=survival_prob,
         data_format='channels_last',
@@ -234,37 +234,19 @@ dense_kernel_initializer = {
 }
 
 
-
-def _calc_same_pad(i: int, k: int, s: int, d: int):
-    return max((math.ceil(i / s) - 1) * s + (k - 1) * d + 1 - i, 0)
-
-def conv2d_same(
-        x, weights, stride=(1, 1), dilation=(1, 1)):
-    if len(weights) == 1:
-        weight, bias = weights[0], None
-    else:
-        weight, bias = weights
-    ih, iw = x.shape[1:3]
-    kh, kw = weight.shape[:2]
-    pad_h = _calc_same_pad(ih, kh, stride[0], dilation[0])
-    pad_w = _calc_same_pad(iw, kw, stride[1], dilation[1])
-    if pad_h > 0 or pad_w > 0:
-        print('paddings', ((pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2)))
-        x = tf.pad(x, paddings=tf.constant([[pad_h // 2, pad_h - pad_h // 2], [pad_w // 2, pad_w - pad_w // 2]]))
-    conv_result = tf.nn.conv2d(x, weight, strides=stride, padding='valid', data_format='NHWC', dilations=dilation)
-    if bias is not None:
-        conv_result += tf.reshape(bias, (1, 1, 1, -1))
-    return conv_result
+def Conv2dPad(*args, padding=(1, 1), **kwargs):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.ZeroPadding2D(padding))
+    result.add(tf.keras.layers.Conv2D(*args, **kwargs))
+    return result
 
 
-class Conv2dSame(tf.keras.layers.Conv2D):
+def DepthwiseConv2dPad(*args, padding=(1, 1), **kwargs):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.ZeroPadding2D(padding))
+    result.add(tf.keras.layers.DepthwiseConv2D(*args, **kwargs))
+    return result
 
-    # pylint: disable=unused-argument
-    def __init__(self, *args, **kwargs):
-        super(Conv2dSame, self).__init__(*args, **kwargs)
-
-    def call(self, x):
-        return conv2d_same(x, self.weights, self.strides, self.dilation_rate)
 
 def round_filters(filters, global_params, skip=False):
     """Round number of filters based on depth multiplier."""
@@ -328,7 +310,7 @@ class MBConvBlock(tf.keras.layers.Layer):
         self.endpoints = None
 
         self.conv_cls = tf.keras.layers.Conv2D
-        self.depthwise_conv_cls = tf.keras.layers.DepthwiseConv2D
+        self.depthwise_conv_cls = DepthwiseConv2dPad
 
         # Builds the block accordings to arguments.
         self._build()
@@ -392,7 +374,7 @@ class MBConvBlock(tf.keras.layers.Layer):
             kernel_size=[kernel_size, kernel_size],
             strides=self._block_args.strides,
             depthwise_initializer=conv_kernel_initializer,
-            padding='same',
+            padding=(kernel_size // 2, kernel_size // 2),
             data_format=self._data_format,
             use_bias=False)
 
@@ -425,10 +407,6 @@ class MBConvBlock(tf.keras.layers.Layer):
         Returns:
           A output tensor.
         """
-        # logging.info('Block input: %s shape: %s', inputs.name, inputs.shape)
-        # logging.info('Block input depth: %s output depth: %s',
-        #              self._block_args.input_filters,
-        #              self._block_args.output_filters)
 
         x = inputs
 
@@ -484,11 +462,9 @@ class MBConvBlock(tf.keras.layers.Layer):
                     s == 1 for s in self._block_args.strides
             ) and inputs.get_shape().as_list()[-1] == x.get_shape().as_list()[-1]:
                 x = tf.add(x, inputs)
-        # logging.info('Project: %s shape: %s', x.name, x.shape)
         return x
 
     def set_torch_weights(self, torch_weights):
-        print({k: v.shape for k, v in torch_weights.items()})
         if self._block_args.expand_ratio != 1:
             default_set_torch_weights(self._bn0, submodel_state_dict(torch_weights, 'bn1.'))
             default_set_torch_weights(self._bn1, submodel_state_dict(torch_weights, 'bn2.'))
@@ -624,11 +600,11 @@ class EfficientNetLite(tf.keras.layers.Layer):
             self._spatial_dims = [1, 2]
 
         # Stem part.
-        self._conv_stem = tf.keras.layers.Conv2D(
+        self._conv_stem = Conv2dPad(
             filters=round_filters(32, self._global_params, self._fix_head_stem),
             kernel_size=[3, 3],
             strides=[2, 2],
-            padding='same',
+            padding=(1, 1),
             data_format=self._global_params.data_format,
             use_bias=False)
         self._bn0 = self._batch_norm(
@@ -638,7 +614,6 @@ class EfficientNetLite(tf.keras.layers.Layer):
 
         # Builds blocks.
         for i, block_args in enumerate(self._blocks_args):
-            print(block_args)
             assert block_args.num_repeat > 0
             assert block_args.super_pixel in [0, 1, 2]
             # Update block input and output filters based on depth multiplier.
@@ -741,7 +716,6 @@ class EfficientNetLite(tf.keras.layers.Layer):
                         self.endpoints['reduction_%s/%s' % (reduction_idx, k)] = v
         self.endpoints['features'] = outputs
 
-        print({k: v.shape for k, v in self.endpoints.items()})
         if self.out_embeddings_list is not None:
             result = [inputs, self.endpoints['stem']] + [self.endpoints['block_{}'.format(i-1)] for i in self.out_embeddings_list]
         else:
@@ -754,57 +728,15 @@ class EfficientNetLite(tf.keras.layers.Layer):
 
 
     def set_torch_weights(self, torch_weights):
-        # tf_weights = []
-        # print([w.shape for w in self.get_weights()])
-        # print('\n\n\ntorch weights:')
-        #
-        # for k in torch_weights.keys():
-        #     print(k, torch_weights[k].shape)
-        #     if k.endswith('.num_batches_tracked'):
-        #         continue
-        #     if k.startswith('classifier.'):
-        #         continue
-        #     if len(torch_weights[k].shape) == 4:
-        #         if '.conv_dw.' in k:
-        #             tf_weights.append(torch_weights[k].permute(2, 3, 0, 1))
-        #         else:
-        #             tf_weights.append(torch_weights[k].permute(2, 3, 1, 0))
-        #     else:
-        #         tf_weights.append(torch_weights[k])
-        #
-        # tf_weights = tf_weights[5:] + tf_weights[:5]
         torch_blocks_list = sorted({layer_name[:len('layers.x.y.')] for layer_name in torch_weights.keys() if layer_name.startswith('layers.')})
-        #
-        # print([w.shape for w in self._blocks[0].get_weights()])
-        # print('torch_blocks_list =', torch_blocks_list, len(torch_blocks_list), len(self._blocks))
         for block_id in range(1, len(self._blocks)):
             self._blocks[block_id].set_torch_weights(submodel_state_dict(torch_weights, torch_blocks_list[block_id + 2]))
         self._blocks[0].set_torch_weights(submodel_state_dict(torch_weights, 'layers.2.0.0.'))
         default_set_torch_weights(self._conv_stem, submodel_state_dict(torch_weights, 'layers.1.0.'))
         default_set_torch_weights(self._bn0, submodel_state_dict(torch_weights, 'layers.1.1.'))
 
-            # block_torch_weights = submodel_state_dict(torch_weights, torch_blocks_list[block_id + 2])
-            #
-            # tf_weights = []
-            # print(list(block_torch_weights.keys()))
-            # for k in block_torch_weights.keys():
-            #     if k.endswith('.num_batches_tracked'):
-            #         continue
-            #     if len(block_torch_weights[k].shape) == 4:
-            #         if '.conv_dw.' in k:
-            #             tf_weights.append(block_torch_weights[k].permute(2, 3, 0, 1))
-            #         else:
-            #             tf_weights.append(block_torch_weights[k].permute(2, 3, 1, 0))
-            #     else:
-            #         tf_weights.append(block_torch_weights[k])
-            # print('tf layers weights =', [w.shape for w in self._blocks[block_id].get_weights()])
-            # print('tf_weights to set =', [tuple(w.shape) for w in tf_weights])
-            # self._blocks[block_id].set_weights(tf_weights)
-
-        # self.set_weights(tf_weights)
-
 
 
 @registry.TF_BACKBONES.register("tf-efficientnet-lite-b0")
-def EfficientNetLiteB0(out_embeddings_list=(3, 4, 9, 16), **kwargs):
+def EfficientNetLiteB0(out_embeddings_list=(3, 5, 11, 16), **kwargs):
     return EfficientNetLite('efficientnet-lite0', out_embeddings_list=out_embeddings_list, **kwargs)

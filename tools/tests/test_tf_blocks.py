@@ -3,7 +3,7 @@ import numpy as np
 from saic_depth_completion.modeling.tf.blocks import *
 from saic_depth_completion.modeling.tf.ops import *
 from saic_depth_completion.modeling.tf.backbone.efficientnet import EfficientNetB0
-from saic_depth_completion.modeling.tf.backbone.efficientnet_lite import EfficientNetLite
+from saic_depth_completion.modeling.tf.backbone.efficientnet_lite import EfficientNetLiteB0
 from saic_depth_completion.modeling.tf.meta import MetaModel as TFMetaModel
 from saic_depth_completion.modeling.tf.dm_lrn import DM_LRN
 from saic_depth_completion.utils.logger import setup_logger
@@ -80,47 +80,10 @@ def run_block_test(torch_block, tf_block, input_shapes, test_name, max_mape=1, t
         mape = (np.abs(one_torch_out.permute(0, 2, 3, 1).detach().numpy() - one_tf_out.numpy())
                 / (np.abs(one_torch_out.permute(0, 2, 3, 1).detach().numpy()) + np.abs(one_tf_out.numpy()) + 1e-5)
                 ).mean() * 100
-        print(one_tf_out.shape, mape)
-        print(one_tf_out[0, 0, 0, 0], one_torch_out[0, 0, 0, 0])
         if mape > max_mape:
             raise Exception('{} test status: '.format(test_name) + colored('ERROR', 'red') + '\tmape ={}'.format(mape))
 
     print('{} test status: '.format(test_name), colored('OK', 'green'))
-
-
-
-def test_efficientnet_lite(torch_model, **kwargs):
-    cfg = get_default_config('DM-LRN')
-    cfg.merge_from_file('configs/dm_lrn/DM-LRN_tf_efficientnet-l0_emma.yaml')
-    cfg.freeze()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    torch_model = MetaModel(cfg, device).eval()
-    logger = setup_logger()
-    snapshoter = Snapshoter(torch_model, logger=logger)
-    snapshoter.load('weights/arch2_tf_efficientnet-l0_emma_e30.pth')
-    torch_block = torch_model.model.backbone#.layers[1]
-    # class KerasLayerWrapper(tf.keras.layers.Layer):
-    #     def __init__(self, tf_layer):
-    #         super(KerasLayerWrapper, self).__init__()
-    #         self.layer = tf_layer
-    #
-    #     def call(self, input, **kwargs):
-    #         return self.layer(input, **kwargs)
-    #
-    #     def set_torch_weights(self, torch_weights):
-    #         default_set_torch_weights(self, torch_weights, weights_permute_order=(2, 3, 1, 0))
-    tf_model = EfficientNetLite('efficientnet-lite0', out_embeddings_list=(3, 4, 9, 16))
-    # tf_block = tf.keras.Sequential()
-    # tf_block.add(tf_model._conv_stem)
-    # tf_block.add(tf_model._bn0)
-    # tf_block.add(tf_model._relu_fn)
-    tf_block = tf_model
-    # input_shapes = [(224, 224, 3)]
-    input_shapes = [(321, 257, 3)]
-    test_name = 'Efficientnet-lite encoder'
-    # torch_block = torch.nn.Conv2d(3, 1, (2, 2))
-    # tf_block = tf.layers.Conv2D(3, 1, (2, 2))
-    run_block_test(torch_block, tf_block, input_shapes, test_name, **kwargs)
 
 
 def test_crp(torch_model, **kwargs):
@@ -180,6 +143,21 @@ def test_efficientnet(torch_model, **kwargs):
     test_name = 'Efficientnet encoder'
     run_block_test(torch_block, tf_block, input_shapes, test_name, **kwargs)
 
+
+def test_efficientnet_lite(torch_model, **kwargs):
+    cfg = get_default_config('DM-LRN')
+    cfg.merge_from_file('configs/dm_lrn/DM-LRN_tf_efficientnet-l0_emma.yaml')
+    cfg.freeze()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch_model = MetaModel(cfg, device).eval()
+    logger = setup_logger()
+    snapshoter = Snapshoter(torch_model, logger=logger)
+    snapshoter.load('weights/arch2_tf_efficientnet-l0_emma_e30.pth')
+    torch_block = torch_model.model.backbone
+    tf_block = EfficientNetLiteB0()
+    input_shapes = [(320, 256, 3)]
+    test_name = 'Efficientnet-lite encoder'
+    run_block_test(torch_block, tf_block, input_shapes, test_name, **kwargs)
 
 def test_dm_lrn(torch_model, **kwargs):
     torch_block = torch_model
