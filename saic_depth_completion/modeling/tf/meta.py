@@ -29,9 +29,8 @@ class MetaModel(tf.keras.layers.Layer):
             colors, raw_depth, mask = batch
             normalized_colors = (colors - tf.convert_to_tensor(self.rgb_mean)) / tf.convert_to_tensor(self.rgb_std)
             rd_mask = raw_depth != 0
-            normalized_raw_depth = tf.tensor_scatter_nd_update(
-                raw_depth, tf.where(rd_mask),
-                (raw_depth[rd_mask] - self.cfg.train.depth_mean) / self.cfg.train.depth_std)
+            normalized_raw_depth = tf.where(rd_mask,
+                                            (raw_depth - self.cfg.train.depth_mean) / self.cfg.train.depth_std, raw_depth)
             new_batch = [normalized_colors, normalized_raw_depth, mask]
             pred = self.model(new_batch, **kwargs)
             return self._postprocess(pred)

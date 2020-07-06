@@ -81,7 +81,7 @@ def main():
     }
 
     test_datasets = {
-        "test_matterport": Matterport(split="test"),
+        "test_matterport": Matterport(split="test", int_image=args.framework in ["tf", "tflite"]),
         # "official_nyu_test": NyuV2Test(split="official_test"),
         #
         # # first

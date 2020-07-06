@@ -80,7 +80,7 @@ class Matterport:
     def __getitem__(self, index):
         color           = np.array(Image.open(self.color_name[index])).transpose([2, 0, 1])
         if not self.int_image:
-            color /= 255.
+            color = color / 255.
         render_depth    = np.array(Image.open(self.render_name[index])) / 4000.
         depth           = np.array(Image.open(self.depth_name[index])) / 4000.
 
