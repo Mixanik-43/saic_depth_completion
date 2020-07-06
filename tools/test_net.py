@@ -11,7 +11,7 @@ from saic_depth_completion.utils.logger import setup_logger
 from saic_depth_completion.utils.experiment import setup_experiment
 from saic_depth_completion.utils.snapshoter import Snapshoter
 from saic_depth_completion.modeling.meta import MetaModel
-from saic_depth_completion.modeling.tf.meta import preprocess, postprocess
+from saic_depth_completion.modeling.tf.meta import preprocess
 from saic_depth_completion.config import get_default_config
 from saic_depth_completion.data.collate import default_collate
 from saic_depth_completion.metrics import Miss, SSIM, DepthL2Loss, DepthL1Loss, DepthRel
@@ -43,6 +43,7 @@ def main():
     frameworks_list = ['pytorch', 'tf', 'tflite']
     assert args.framework in frameworks_list, 'Supported frameworks are {}, got {}'.format(frameworks_list, args.framework)
     cfg = get_default_config(args.default_cfg)
+    print(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.freeze()
 
@@ -59,14 +60,13 @@ def main():
 
         inference_procedure = tf_inference
         preprocess_func = lambda batch: preprocess(cfg, batch)
-        postprocess_func = lambda pred: postprocess(cfg, pred)
-
+        postprocess_func = lambda pred: pred
     else:
         model = tf.lite.Interpreter(model_path=args.saved_model)
         model.allocate_tensors()
         inference_procedure = tflite_inference
         preprocess_func = lambda batch: preprocess(cfg, batch)
-        postprocess_func = lambda pred: postprocess(cfg, pred)
+        postprocess_func = lambda pred: pred
 
     metrics = {
         'mse': DepthL2Loss(),

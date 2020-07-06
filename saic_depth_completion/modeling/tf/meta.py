@@ -9,26 +9,11 @@ from saic_depth_completion.utils import registry
 
 
 def preprocess(cfg, batch, dtype=np.float32):
-    color = batch["color"].permute(0, 2, 3, 1).detach().numpy().astype(dtype) - np.array(cfg.train.rgb_mean).reshape(1, 1, 1, 3)
-    color = color / np.array(cfg.train.rgb_std).reshape(1, 1, 1, 3)
-
-    mask = batch["mask"].permute(0, 2, 3, 1).detach().numpy()
-    raw_depth = batch["raw_depth"].permute(0, 2, 3, 1).detach().numpy()
-    rd_mask = raw_depth != 0
-    raw_depth[rd_mask] = raw_depth[rd_mask] - cfg.train.depth_mean
-    raw_depth[rd_mask] = raw_depth[rd_mask] / cfg.train.depth_std
-    return [color.astype(dtype), raw_depth.astype(dtype), mask.astype(dtype)]
-
-
-def postprocess(cfg, pred):
-    if cfg.model.predict_log_depth:
-        return pred.exp()
-    else:
-        return pred
+    return [batch[key].permute(0, 2, 3, 1).detach().numpy().astype(dtype()) for key in ["color", "mask", "raw_depth"]]
 
 
 class MetaModel(tf.keras.layers.Layer):
-    def __init__(self, cfg, device, input_shape=None):
+    def __init__(self, cfg, device, input_shape=None, fuse_pprocess=False):
         super(MetaModel, self).__init__()
         self.model = registry.TF_MODELS[cfg.model.arch](cfg.model, input_shape=input_shape)
         self.device = device
@@ -36,9 +21,14 @@ class MetaModel(tf.keras.layers.Layer):
             self.device = tf.device(self.device)
 
         self.cfg = cfg
+        self.rgb_mean = np.array(cfg.train.rgb_mean).reshape(1, 1, 1, 3) * 255.
+        self.rgb_std = np.array(cfg.train.rgb_std).reshape(1, 1, 1, 3) * 255.
 
     def call(self, batch, **kwargs):
         with self.device:
+            batch[0] = (batch[0] - self.rgb_mean) / self.rgb_std
+            rd_mask = batch[1] != 0
+            batch[1][rd_mask] = (batch[1][rd_mask] - self.cfg.train.depth_mean) / self.cfg.train.depth_std
             return self.model(batch, **kwargs)
 
     def preprocess(self, batch):
@@ -46,7 +36,11 @@ class MetaModel(tf.keras.layers.Layer):
             return preprocess(self.cfg, batch)
 
     def postprocess(self, input):
-        return postprocess(self.cfg, input)
+        if self.cfg.model.predict_log_depth:
+            return tf.math.exp(input):
+        else:
+            return input
+            
 
     def criterion(self, pred, gt):
         return self.model.criterion(pred, gt)

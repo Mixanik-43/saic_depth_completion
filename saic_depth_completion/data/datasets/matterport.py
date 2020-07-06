@@ -9,7 +9,7 @@ ROOT = '/Vol1/dbstore/datasets/depth_completion/Matterport3D/'
 
 class Matterport:
     def __init__(
-            self, root=ROOT, split="train", transforms=None
+            self, root=ROOT, split="train", transforms=None, int_image=False
     ):
         self.transforms = transforms
         self.data_root = os.path.join(root, "data")
@@ -17,6 +17,7 @@ class Matterport:
         self.data_list = self._get_data_list(self.split_file)
         self.color_name, self.depth_name, self.render_name = [], [], []
         self.normal_name = []
+        self.int_image = int_image
 
         self._load_data()
 
@@ -77,7 +78,9 @@ class Matterport:
         return len(self.depth_name)
 
     def __getitem__(self, index):
-        color           = np.array(Image.open(self.color_name[index])).transpose([2, 0, 1]) / 255.
+        color           = np.array(Image.open(self.color_name[index])).transpose([2, 0, 1])
+        if not self.int_image:
+            color /= 255.
         render_depth    = np.array(Image.open(self.render_name[index])) / 4000.
         depth           = np.array(Image.open(self.depth_name[index])) / 4000.
 
