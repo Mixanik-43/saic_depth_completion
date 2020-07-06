@@ -33,13 +33,17 @@ class MetaModel(tf.keras.layers.Layer):
                 raw_depth, tf.where(rd_mask),
                 (raw_depth[rd_mask] - self.cfg.train.depth_mean) / self.cfg.train.depth_std)
             new_batch = [normalized_colors, normalized_raw_depth, mask]
-            return self.model(new_batch, **kwargs)
+            pred = self.model(new_batch, **kwargs)
+            return self._postprocess(pred)
 
     def preprocess(self, batch):
         with self.device:
             return preprocess(self.cfg, batch)
 
     def postprocess(self, input):
+        return input
+
+    def _postprocess(self, input):
         if self.cfg.model.predict_log_depth:
             return tf.math.exp(input)
         else:
