@@ -6,7 +6,7 @@ model:
   use_crp: True
   criterion: (("LogDepthL1Loss",  1.0), )
   predict_log_depth: True
-  concat_mask: True
+  input_mask: True
 
   backbone:
     arch: "tf-efficientnet-lite-b0"

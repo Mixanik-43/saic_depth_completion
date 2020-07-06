@@ -15,7 +15,7 @@ _C.model.use_crp = True
 # loss fn: list of tuple
 _C.model.criterion = [("LogDepthL1Loss", 1.0)]
 _C.model.predict_log_depth = True
-_C.model.concat_mask = False
+_C.model.input_mask = False
 
 # backbone
 _C.model.backbone = CN()
