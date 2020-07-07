@@ -9,7 +9,7 @@ from saic_depth_completion.utils import registry
 
 
 def preprocess(cfg, batch, dtype=np.float32):
-    return [batch[key].permute(0, 2, 3, 1).detach().numpy().astype(dtype) for key in ["color", "mask", "raw_depth"]]
+    return [batch[key].permute(0, 2, 3, 1).detach().numpy().astype(dtype) for key in ["color", "raw_depth", "mask"]]
 
 
 class MetaModel(tf.keras.layers.Layer):
@@ -28,7 +28,8 @@ class MetaModel(tf.keras.layers.Layer):
         with self.device:
             colors, raw_depth, mask = batch
             normalized_colors = (colors - tf.convert_to_tensor(self.rgb_mean)) / tf.convert_to_tensor(self.rgb_std)
-            rd_mask = raw_depth != 0
+            normalized_raw_depth = raw_depth
+            rd_mask = tf.cast(mask, "bool")
             normalized_raw_depth = tf.where(rd_mask,
                                             (raw_depth - self.cfg.train.depth_mean) / self.cfg.train.depth_std, raw_depth)
             new_batch = [normalized_colors, normalized_raw_depth, mask]

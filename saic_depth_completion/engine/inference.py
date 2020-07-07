@@ -95,7 +95,6 @@ def tflite_inference(model, test_loaders, metrics, save_dir="", logger=None,
                      preprocess_func=lambda x: x, postprocess_func=lambda x: x):
     input_details = model.get_input_details()
     output_details = model.get_output_details()
-    print('shapes', [input_details[i]['shape'] for i in range(len(input_details))])
 
     metrics_meter = AggregatedMeter(metrics, maxlen=20)
     for subset, loader in test_loaders.items():
